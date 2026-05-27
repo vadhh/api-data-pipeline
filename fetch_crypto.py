@@ -9,7 +9,6 @@ import argparse
 import logging
 from datetime import date
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, numbers
 
 # Configure logging to write to both stdout and pipeline.log
 logger = logging.getLogger("crypto_pipeline")
