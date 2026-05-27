@@ -3,6 +3,10 @@
 import time
 import sys
 import requests
+import os
+from datetime import date
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, numbers
 
 HEADERS = [
     "Rank",
@@ -79,3 +83,59 @@ def fetch_all_coins():
             time.sleep(2)
     print(f"Fetched {len(all_coins)} coins.")
     return [transform_coin(c) for c in all_coins]
+
+
+def get_sheet_name(wb, base_name):
+    if base_name not in wb.sheetnames:
+        return base_name
+    counter = 2
+    while f"{base_name}_{counter}" in wb.sheetnames:
+        counter += 1
+    return f"{base_name}_{counter}"
+
+
+def write_to_excel(rows, filepath, sheet_date=None):
+    if sheet_date is None:
+        sheet_date = date.today().isoformat()
+
+    if os.path.exists(filepath):
+        wb = load_workbook(filepath)
+    else:
+        wb = Workbook()
+        if "Sheet" in wb.sheetnames:
+            del wb["Sheet"]
+
+    sheet_name = get_sheet_name(wb, sheet_date)
+    ws = wb.create_sheet(title=sheet_name)
+
+    bold = Font(bold=True)
+    for col_idx, header in enumerate(HEADERS, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = bold
+
+    for row_idx, coin in enumerate(rows, 2):
+        for col_idx, header in enumerate(HEADERS, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=coin.get(header))
+
+    col_widths = {
+        "Rank": 6,
+        "Name": 22,
+        "Symbol": 8,
+        "Current Price (USD)": 20,
+        "24h Change %": 14,
+        "7d Change %": 14,
+        "Market Cap": 18,
+        "24h Volume": 16,
+        "Circulating Supply": 20,
+        "Volatility": 12,
+    }
+    for col_idx, header in enumerate(HEADERS, 1):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = col_widths.get(header, 14)
+
+    ws.freeze_panes = "A2"
+
+    wb.save(filepath)
+    wb.close()
+    print(f"Saved sheet '{sheet_name}' to {filepath}")
+
