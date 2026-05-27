@@ -4,9 +4,30 @@ import time
 import sys
 import requests
 import os
+import math
+import argparse
+import logging
 from datetime import date
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, numbers
+
+# Configure logging to write to both stdout and pipeline.log
+logger = logging.getLogger("crypto_pipeline")
+logger.setLevel(logging.INFO)
+
+if not logger.handlers:
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    
+    # File handler
+    fh = logging.FileHandler("pipeline.log", encoding="utf-8")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    
+    # Stream handler
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
 
 HEADERS = [
     "Rank",
@@ -62,33 +83,35 @@ def fetch_page(page, max_retries=5):
             resp = requests.get(COINGECKO_URL, params=params, timeout=30)
             if resp.status_code == 429:
                 wait = 15 * (attempt + 1)
-                print(f"  Rate limit (429) hit. Retry {attempt + 1}/{max_retries} for page {page} "
-                      f"(waiting {wait}s)...")
+                logger.warning(f"  Rate limit (429) hit. Retry {attempt + 1}/{max_retries} for page {page} "
+                               f"(waiting {wait}s)...")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
-            wait = 5 ** (attempt + 1)
-            print(f"  Retry {attempt + 1}/{max_retries} for page {page} "
-                  f"(waiting {wait}s): {e}")
+            wait = 5 * (2 ** attempt)
+            logger.warning(f"  Retry {attempt + 1}/{max_retries} for page {page} "
+                           f"(waiting {wait}s): {e}")
             time.sleep(wait)
     return None
 
 
-def fetch_all_coins():
+def fetch_all_coins(top=250):
     all_coins = []
-    for page in range(1, 4):
-        print(f"Fetching page {page}/3...")
+    per_page = PARAMS_BASE.get("per_page", 100)
+    pages_needed = math.ceil(top / per_page)
+    for page in range(1, pages_needed + 1):
+        logger.info(f"Fetching page {page}/{pages_needed}...")
         data = fetch_page(page)
         if data is None:
-            print(f"ERROR: Failed to fetch page {page} after retries. Aborting.")
+            logger.error(f"ERROR: Failed to fetch page {page} after retries. Aborting.")
             sys.exit(1)
         all_coins.extend(data)
-        if page < 3:
+        if page < pages_needed:
             time.sleep(2)
-    all_coins = all_coins[:250]
-    print(f"Fetched {len(all_coins)} coins.")
+    all_coins = all_coins[:top]
+    logger.info(f"Fetched {len(all_coins)} coins.")
     return [transform_coin(c) for c in all_coins]
 
 
@@ -144,23 +167,26 @@ def write_to_excel(rows, filepath, sheet_date=None):
 
     wb.save(filepath)
     wb.close()
-    print(f"Saved sheet '{sheet_name}' to {filepath}")
-
-
-OUTPUT_FILE = "crypto_data.xlsx"
+    logger.info(f"Saved sheet '{sheet_name}' to {filepath}")
 
 
 def main():
-    print("=" * 50)
-    print("Crypto Data Pipeline")
-    print(f"Date: {date.today().isoformat()}")
-    print("=" * 50)
+    parser = argparse.ArgumentParser(description="Crypto Data Pipeline")
+    parser.add_argument("--top", type=int, default=250, help="Number of top coins to fetch")
+    parser.add_argument("--output", type=str, default="crypto_data.xlsx", help="Output Excel file path")
+    args = parser.parse_args()
 
-    coins = fetch_all_coins()
-    write_to_excel(coins, OUTPUT_FILE)
+    logger.info("=" * 50)
+    logger.info("Crypto Data Pipeline")
+    logger.info(f"Date: {date.today().isoformat()}")
+    logger.info(f"Target: Top {args.top} coins to {args.output}")
+    logger.info("=" * 50)
 
-    print("=" * 50)
-    print("Done!")
+    coins = fetch_all_coins(top=args.top)
+    write_to_excel(coins, args.output)
+
+    logger.info("=" * 50)
+    logger.info("Done!")
 
 
 if __name__ == "__main__":

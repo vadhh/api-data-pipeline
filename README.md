@@ -67,7 +67,13 @@ python fetch_crypto.py
 python fetch_crypto.py
 ```
 
-The script takes about 10 seconds. You'll see progress messages. When it says "Done!", open `crypto_data.xlsx` to see the data.
+By default, the script fetches the top 250 coins and writes to `crypto_data.xlsx`. You can customize these using command line options:
+```bash
+# Fetch the top 50 coins and write to custom_output.xlsx
+python fetch_crypto.py --top 50 --output custom_output.xlsx
+```
+
+The script takes about 10 seconds. You'll see progress messages. When it says "Done!", open the output Excel file to see the data. Logs are also appended to `pipeline.log` for automated run auditing.
 
 If you run it more than once in the same day, each run gets its own sheet (e.g., `2026-05-27`, `2026-05-27_2`).
 
