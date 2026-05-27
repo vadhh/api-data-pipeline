@@ -55,15 +55,21 @@ PARAMS_BASE = {
 }
 
 
-def fetch_page(page, max_retries=3):
+def fetch_page(page, max_retries=5):
     params = {**PARAMS_BASE, "page": page}
     for attempt in range(max_retries):
         try:
             resp = requests.get(COINGECKO_URL, params=params, timeout=30)
+            if resp.status_code == 429:
+                wait = 15 * (attempt + 1)
+                print(f"  Rate limit (429) hit. Retry {attempt + 1}/{max_retries} for page {page} "
+                      f"(waiting {wait}s)...")
+                time.sleep(wait)
+                continue
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
-            wait = 2 ** (attempt + 1)
+            wait = 5 ** (attempt + 1)
             print(f"  Retry {attempt + 1}/{max_retries} for page {page} "
                   f"(waiting {wait}s): {e}")
             time.sleep(wait)
@@ -81,6 +87,7 @@ def fetch_all_coins():
         all_coins.extend(data)
         if page < 3:
             time.sleep(2)
+    all_coins = all_coins[:250]
     print(f"Fetched {len(all_coins)} coins.")
     return [transform_coin(c) for c in all_coins]
 
@@ -139,3 +146,22 @@ def write_to_excel(rows, filepath, sheet_date=None):
     wb.close()
     print(f"Saved sheet '{sheet_name}' to {filepath}")
 
+
+OUTPUT_FILE = "crypto_data.xlsx"
+
+
+def main():
+    print("=" * 50)
+    print("Crypto Data Pipeline")
+    print(f"Date: {date.today().isoformat()}")
+    print("=" * 50)
+
+    coins = fetch_all_coins()
+    write_to_excel(coins, OUTPUT_FILE)
+
+    print("=" * 50)
+    print("Done!")
+
+
+if __name__ == "__main__":
+    main()
